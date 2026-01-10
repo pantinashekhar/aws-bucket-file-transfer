@@ -3,19 +3,18 @@ import asyncio
 import os
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.db.base import Base
-from app.db.models import FileOperationLog, TransferJob  # Add your models here
 
 async def main():
     url = os.getenv('DATABASE_URL')
-    if url.startswith('postgres://'):
+    if url and url.startswith('postgres://'):
         url = url.replace('postgres://', 'postgresql://', 1)
     
-    print(f"Connecting to {url.split('@')[-1].split('/')[0]}...")
-    engine = create_async_engine(url, echo=True)
+    print(f"Connecting to DB...")
+    engine = create_async_engine(url)
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print('✅ Tables created successfully!')
+    print('✅ All available tables created!')
     await engine.dispose()
 
 if __name__ == "__main__":
