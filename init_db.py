@@ -2,8 +2,8 @@
 import asyncio
 import os
 from sqlalchemy.ext.asyncio import create_async_engine
-from db.base import Base
-from db.models import FileOperationLog, TransferJob  # Add your models here
+from app.db.base import Base
+from app.db.models import FileOperationLog, TransferJob  # Add your models here
 
 async def main():
     url = os.getenv('DATABASE_URL')
