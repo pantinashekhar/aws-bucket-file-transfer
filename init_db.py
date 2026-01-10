@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 import asyncio
 import os
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine
 from app.db.base import Base
+
+
+load_dotenv()
 
 async def main():
     url = os.getenv('DATABASE_URL')
