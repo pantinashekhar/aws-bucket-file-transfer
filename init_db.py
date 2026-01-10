@@ -1,25 +1,15 @@
-#!/usr/bin/env python3
-import asyncio
 import os
+from sqlalchemy import create_engine
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import create_async_engine
-from app.db.base import Base
-
+from db.base import Base
 
 load_dotenv()
 
-async def main():
-    url = os.getenv('DATABASE_URL')
-    if url and url.startswith('postgres://'):
-        url = url.replace('postgres://', 'postgresql://', 1)
-    
-    print(f"Connecting to DB...")
-    engine = create_async_engine(url)
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print('✅ All available tables created!')
-    await engine.dispose()
+url = os.getenv('DATABASE_URL')
+if url and url.startswith('postgres://'):
+    url = url.replace('postgres://', 'postgresql://', 1)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+print("Connecting to DB...")
+engine = create_engine(url)
+Base.metadata.create_all(bind=engine)
+print('✅ Tables created successfully!')
