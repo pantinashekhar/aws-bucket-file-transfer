@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, func
-from app.db.base import Base
+from db.base import Base
 
 class FileOperationLog(Base):
     __tablename__ = "file_operation_logs"
