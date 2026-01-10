@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
-from db.base import Base
+from app.db.base import Base
 
 load_dotenv()
 
