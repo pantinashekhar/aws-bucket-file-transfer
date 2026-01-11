@@ -1,5 +1,4 @@
-from app.storage.local import LocalStorageClient
+from .local import LocalStorageClient  # Your fake impl
 
-def get_storage_client() -> LocalStorageClient:
-    # kept simple for now; later can switch to real S3
+async def get_storage_client():
     return LocalStorageClient()

@@ -1,44 +1,49 @@
 import os
-from typing import List, BinaryIO
-from app.core.config import settings
-from app.storage.base import StorageClient, StorageObject
+import aiofiles
+from typing import List
+from io import BytesIO
+from .base import StorageClient, StorageObject
 
 class LocalStorageClient(StorageClient):
-    def __init__(self, root: str | None = None) -> None:
-        self.root = root or settings.LOCAL_STORAGE_ROOT
-
-    def _bucket_path(self, bucket: str) -> str:
-        return os.path.join(self.root, bucket)
-
-    def _object_path(self, bucket: str, key: str) -> str:
-        return os.path.join(self._bucket_path(bucket), key)
+    def __init__(self, data_dir: str = "data"):
+        self.data_dir = os.path.abspath(data_dir)
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.data_dir, "test"), exist_ok=True)  # Source bucket
+        os.makedirs(os.path.join(self.data_dir, "backup"), exist_ok=True)  # Dest bucket
 
     async def list_objects(self, bucket: str, prefix: str | None = None) -> List[StorageObject]:
-        bucket_path = self._bucket_path(bucket)
-        result: List[StorageObject] = []
-        if not os.path.isdir(bucket_path):
-            return result
+        bucket_path = os.path.join(self.data_dir, bucket)
+        if not os.path.exists(bucket_path):
+            return []
+        
+        objects = []
         for root, _, files in os.walk(bucket_path):
-            for name in files:
-                full_path = os.path.join(root, name)
-                rel_path = os.path.relpath(full_path, bucket_path)
-                if prefix and not rel_path.startswith(prefix):
+            for file in files:
+                key = os.path.relpath(os.path.join(root, file), bucket_path)
+                if prefix and not key.startswith(prefix):
                     continue
-                size = os.path.getsize(full_path)
-                result.append(StorageObject(key=rel_path.replace("\\", "/"), size=size))
-        return result
+                size = os.path.getsize(os.path.join(root, file))
+                objects.append(StorageObject(key, size))
+        return objects
 
     async def upload_file(self, bucket: str, key: str, file_obj: BinaryIO) -> None:
-        obj_path = self._object_path(bucket, key)
-        os.makedirs(os.path.dirname(obj_path), exist_ok=True)
-        with open(obj_path, "wb") as f:
-            while True:
-                chunk = file_obj.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
+        bucket_path = os.path.join(self.data_dir, bucket, key)
+        os.makedirs(os.path.dirname(bucket_path), exist_ok=True)
+        
+        data = file_obj.read()
+        async with aiofiles.open(bucket_path, 'wb') as f:
+            await f.write(data)
+        print(f"✅ Uploaded {bucket}/{key}")
 
     async def download_file(self, bucket: str, key: str) -> bytes:
-        obj_path = self._object_path(bucket, key)
-        with open(obj_path, "rb") as f:
-            return f.read()
+        file_path = os.path.join(self.data_dir, bucket, key)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"{bucket}/{key} not found")
+        
+        async with aiofiles.open(file_path, 'rb') as f:
+            return await f.read()
+
+# Create test file
+async def create_test_file():
+    async with aiofiles.open("data/test/foo.txt", 'w') as f:
+        await f.write("Hello fake S3 world!")
