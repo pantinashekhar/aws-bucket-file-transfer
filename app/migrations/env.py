@@ -19,25 +19,23 @@ from app.db.base import Base
 target_metadata = Base.metadata  # Your models
 
 def run_migrations_online() -> None:
-    """Run migrations synchronously with psycopg2."""
+    """Force sync psycopg2 via config override."""
     import os
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import NullPool
     
+    # Override config BEFORE engine_from_config
     db_url = os.environ.get('DATABASE_URL')
-    if not db_url:
-        raise RuntimeError("DATABASE_URL not set")
+    if db_url:
+        if db_url.startswith('postgres://'):
+            db_url = 'postgresql+psycopg2://' + db_url[10:]
+        else:
+            db_url = 'postgresql+psycopg2://' + db_url[12:]
+        config.set_main_option('sqlalchemy.url', db_url)
     
-    # FORCE psycopg2 sync driver - CRITICAL
-    if db_url.startswith('postgres://'):
-        db_url = db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
-    else:
-        db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
-    
-    connectable = create_engine(
-        db_url,
-        poolclass=NullPool,
-        echo=True
+    # Standard Alembic call - now uses psycopg2
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix='sqlalchemy.',
+        poolclass=pool.NullPool
     )
     
     with connectable.connect() as connection:
@@ -47,7 +45,6 @@ def run_migrations_online() -> None:
         )
     
     connectable.dispose()
-
 
 def run_migrations_offline() -> None:
     """Run migrations offline."""
