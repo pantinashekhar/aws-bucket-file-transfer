@@ -29,23 +29,22 @@ async def create_transfer(
 
     # Create pending job immediately
     job = TransferJob(  # Remove job_id=
-    source_bucket=source_bucket,
-    source_key=source_key,
-    dest_bucket=dest_bucket,
-    dest_key=dest_key,
-    status="pending"  # String, not enum yet
-)
+        source_bucket=source_bucket,
+        source_key=source_key,
+        dest_bucket=dest_bucket,
+        dest_key=dest_key,
+        status=OperationStatus.PENDING  # ✅ Enum
+    )
     session.add(job)
     await session.commit()
-    await session.refresh(job)
-
-    # Queue background processing
+    await session.refresh(job)  # ✅ Gets job_id
+    
     background_tasks.add_task(perform_transfer, job.id, storage)
     
     return {
-        "job_id": job.job_id,
-        "status": "pending",
-        "message": "Transfer queued - check status below"
+        "job_id": job.job_id,  # ✅ Now populated
+        "status": job.status.value,  # If enum needs .value
+        "message": "Transfer queued"
     }
 
 
@@ -87,12 +86,10 @@ async def get_job_status(
 
 
 async def perform_transfer(job_id: int, storage: StorageClient):
-    """Background transfer worker"""
     session = AsyncSessionLocal()
+    job = None
     try:
-        result = await session.execute(
-            select(TransferJob).where(TransferJob.id == job_id)
-        )
+        result = await session.execute(select(TransferJob).where(TransferJob.id == job_id))
         job = result.scalar_one()
         
         job.status = OperationStatus.IN_PROGRESS
@@ -103,11 +100,12 @@ async def perform_transfer(job_id: int, storage: StorageClient):
         await storage.upload_file(job.dest_bucket, job.dest_key, BytesIO(source_data))
         
         job.status = OperationStatus.COMPLETED
+        await session.commit()  # ✅ Commit BEFORE close
         
     except Exception as e:
-        if 'job' in locals():
+        if job:
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
-        await session.commit()
+            await session.commit()  # ✅ Commit error too
     finally:
         await session.close()
