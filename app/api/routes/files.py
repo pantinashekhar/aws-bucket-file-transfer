@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
-from storage.base import StorageClient, StorageObject
-from storage.deps import get_storage_client
+from app.storage.base import StorageClient, StorageObject
+from app.storage.deps import get_storage_client
 
 router = APIRouter(prefix="/files", tags=["files"])
 
