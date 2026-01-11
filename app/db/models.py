@@ -3,6 +3,7 @@ from app.db.base import Base
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import datetime
 from enum import Enum
+from uuid import uuid4
 
 class OperationStatus(str, Enum):
     PENDING = "pending"
@@ -25,7 +26,7 @@ class TransferJob(AsyncAttrs, Base):
     __tablename__ = "transfer_jobs"
     
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String, unique=True, index=True)
+    job_id = Column(String, unique=True, index=True, default=lambda: str(uuid4()))
     source_bucket = Column(String)
     source_key = Column(String)
     dest_bucket = Column(String)
