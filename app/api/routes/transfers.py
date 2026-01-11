@@ -9,7 +9,9 @@ from app.storage.deps import get_storage_client
 from app.storage.base import StorageClient
 from fastapi import BackgroundTasks
 from io import BytesIO
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
 
@@ -86,26 +88,39 @@ async def get_job_status(
 
 
 async def perform_transfer(job_id: int, storage: StorageClient):
+    logger.info(f"🔄 START job_id={job_id}")
     session = AsyncSessionLocal()
-    job = None
     try:
         result = await session.execute(select(TransferJob).where(TransferJob.id == job_id))
-        job = result.scalar_one()
+        job = result.scalar_one_or_none()
+        if not job:
+            logger.error(f"❌ NO JOB FOUND id={job_id}")
+            return
+            
+        logger.info(f"📋 JOB {job.id} '{job.job_id}' {job.status} -> {job.source_bucket}/{job.source_key}")
         
         job.status = OperationStatus.IN_PROGRESS
         await session.commit()
         
-        # Copy file
+        # FAKE DATA TEST
+        logger.info(f"📥 Downloading {job.source_bucket}/{job.source_key}")
         source_data = await storage.download_file(job.source_bucket, job.source_key)
+        logger.info(f"✅ Downloaded {len(source_data)} bytes")
+        
+        logger.info(f"📤 Uploading to {job.dest_bucket}/{job.dest_key}")
         await storage.upload_file(job.dest_bucket, job.dest_key, BytesIO(source_data))
+        logger.info(f"✅ Uploaded")
         
         job.status = OperationStatus.COMPLETED
-        await session.commit()  # ✅ Commit BEFORE close
+        await session.commit()
+        logger.info(f"🎉 COMPLETED {job.job_id}")
         
     except Exception as e:
-        if job:
+        logger.error(f"💥 FAILED job {job_id}: {type(e).__name__}: {e}", exc_info=True)
+        if 'job' in locals():
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
-            await session.commit()  # ✅ Commit error too
+            await session.commit()
     finally:
         await session.close()
+
