@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from api.routes import files
 from api.routes.transfers import router as transfers_router
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -33,7 +32,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-app.include_router(files.router, prefix="/api")
 app.include_router(transfers_router, prefix="/api")
 
 # Add after app.include_router(...)
