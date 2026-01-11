@@ -9,7 +9,9 @@ from app.db.base import Base  # ADJUST: import your Base (e.g., from app import 
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy import create_engine  # Sync engine
 import os
+
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -17,18 +19,40 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Get Heroku DATABASE_URL and fix for SQLAlchemy/asyncpg
-db_url = os.environ.get('DATABASE_URL')
-if db_url.startswith('postgres://'):
-    db_url = db_url.replace('postgres://', 'postgresql+asyncpg://', 1)
-else:
-    db_url = db_url.replace('postgresql://', 'postgresql+asyncpg://', 1)
+"""Run migrations synchronously."""
 
-# Use async engine for migrations (matches your app's asyncpg usage)
-connectable = create_async_engine(db_url, poolclass=NullPool)
+
+
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    raise RuntimeError("DATABASE_URL not set")
+
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql://', 1)  # Sync psycopg2
+else:
+    db_url = db_url.replace('postgresql://', 'postgresql://', 1)
+
+# Sync engine for Alembic (uses psycopg2 implicitly)
+connectable = create_engine(
+    db_url,
+    poolclass=NullPool,
+    echo=True  # Debug SQL
+)
+
+
+
 
 
 target_metadata = Base.metadata  # Your models' metadata
+
+with connectable.connect() as connection:  # Sync context
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata
+    )
+
+connectable.dispose()
+
 
 def run_migrations_offline() -> None:
     """Offline mode not supported for async."""
