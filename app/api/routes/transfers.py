@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query , BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import Session
+from app.db.session import get_session 
 from uuid import uuid4
 from app.db.session import get_session, AsyncSessionLocal
 from app.db.models import TransferJob, OperationStatus
@@ -11,6 +12,7 @@ from fastapi import BackgroundTasks
 from io import BytesIO
 import logging
 
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
@@ -88,39 +90,24 @@ async def get_job_status(
 
 
 async def perform_transfer(job_id: int, storage: StorageClient):
-    print(f"🔄 START job_id={job_id}")
-    session = AsyncSessionLocal()
-    try:
-        result = await session.execute(select(TransferJob).where(TransferJob.id == job_id))
-        job = result.scalar_one_or_none()
-        if not job:
-            print(f"❌ NO JOB FOUND id={job_id}")
-            return
-            
-        print(f"📋 JOB {job.id} '{job.job_id}' {job.status} -> {job.source_bucket}/{job.source_key}")
-        
+    # ✅ Correct - import and use get_session dependency pattern
+    # Add this import
+    async with get_session() as session:  # Or await get_db() if it's a generator  # Reuse get_session dep
+        job = await session.get(TransferJob, job_id)
+        if not job: return
+        logger.info(f"🔥 BACKGROUND START {job.job_id}")
         job.status = OperationStatus.IN_PROGRESS
         await session.commit()
-        
-        # FAKE DATA TEST
-        print(f"📥 Downloading {job.source_bucket}/{job.source_key}")
-        source_data = await storage.download_file(job.source_bucket, job.source_key)
-        print(f"✅ Downloaded {len(source_data)} bytes")
-        
-        print(f"📤 Uploading to {job.dest_bucket}/{job.dest_key}")
-        await storage.upload_file(job.dest_bucket, job.dest_key, BytesIO(source_data))
-        print(f"✅ Uploaded")
-        
-        job.status = OperationStatus.COMPLETED
-        await session.commit()
-        print(f"🎉 COMPLETED {job.job_id}")
-        
-    except Exception as e:
-        print(f"💥 FAILED job {job_id}: {type(e).__name__}: {e}", exc_info=True)
-        if 'job' in locals():
+        try:
+            data = await storage.download_file(job.source_bucket, job.source_key)
+            logger.info(f"📥 {len(data)} bytes")
+            await storage.upload_file(job.dest_bucket, job.dest_key, data)
+            logger.info("📤 UPLOADED")
+            job.status = OperationStatus.COMPLETED
+        except Exception as e:
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
-            await session.commit()
-    finally:
-        await session.close()
+            logger.error(f"💥 {e}")
+        await session.commit()
+
 
