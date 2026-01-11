@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, func, Enum as SQLEnum
-from db.base import Base
+from app.db.base import Base
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import datetime
 from enum import Enum

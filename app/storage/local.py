@@ -1,7 +1,7 @@
 import os
 from typing import List, BinaryIO
-from core.config import settings
-from storage.base import StorageClient, StorageObject
+from app.core.config import settings
+from app.storage.base import StorageClient, StorageObject
 
 class LocalStorageClient(StorageClient):
     def __init__(self, root: str | None = None) -> None:
