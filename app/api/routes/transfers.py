@@ -88,35 +88,35 @@ async def get_job_status(
 
 
 async def perform_transfer(job_id: int, storage: StorageClient):
-    logger.info(f"🔄 START job_id={job_id}")
+    print(f"🔄 START job_id={job_id}")
     session = AsyncSessionLocal()
     try:
         result = await session.execute(select(TransferJob).where(TransferJob.id == job_id))
         job = result.scalar_one_or_none()
         if not job:
-            logger.error(f"❌ NO JOB FOUND id={job_id}")
+            print(f"❌ NO JOB FOUND id={job_id}")
             return
             
-        logger.info(f"📋 JOB {job.id} '{job.job_id}' {job.status} -> {job.source_bucket}/{job.source_key}")
+        print(f"📋 JOB {job.id} '{job.job_id}' {job.status} -> {job.source_bucket}/{job.source_key}")
         
         job.status = OperationStatus.IN_PROGRESS
         await session.commit()
         
         # FAKE DATA TEST
-        logger.info(f"📥 Downloading {job.source_bucket}/{job.source_key}")
+        print(f"📥 Downloading {job.source_bucket}/{job.source_key}")
         source_data = await storage.download_file(job.source_bucket, job.source_key)
-        logger.info(f"✅ Downloaded {len(source_data)} bytes")
+        print(f"✅ Downloaded {len(source_data)} bytes")
         
-        logger.info(f"📤 Uploading to {job.dest_bucket}/{job.dest_key}")
+        print(f"📤 Uploading to {job.dest_bucket}/{job.dest_key}")
         await storage.upload_file(job.dest_bucket, job.dest_key, BytesIO(source_data))
-        logger.info(f"✅ Uploaded")
+        print(f"✅ Uploaded")
         
         job.status = OperationStatus.COMPLETED
         await session.commit()
-        logger.info(f"🎉 COMPLETED {job.job_id}")
+        print(f"🎉 COMPLETED {job.job_id}")
         
     except Exception as e:
-        logger.error(f"💥 FAILED job {job_id}: {type(e).__name__}: {e}", exc_info=True)
+        print(f"💥 FAILED job {job_id}: {type(e).__name__}: {e}", exc_info=True)
         if 'job' in locals():
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
