@@ -14,11 +14,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Fix Heroku DATABASE_URL for asyncpg
-db_url = os.getenv("DATABASE_URL")
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql+asyncpg://")
+import os
+url = config.get_main_option("sqlalchemy.url")
+if url.startswith("postgres://"):
+    url = url.replace("postgres://", "postgresql://", 1)
+config.set_main_option("sqlalchemy.url", url)
 
-config.set_main_option("sqlalchemy.url", db_url)
 target_metadata = Base.metadata  # Your models' metadata
 
 def run_migrations_offline() -> None:
