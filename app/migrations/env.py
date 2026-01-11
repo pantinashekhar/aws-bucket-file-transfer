@@ -7,18 +7,26 @@ from alembic import context
 from alembic.script import ScriptDirectory
 from app.db.base import Base  # ADJUST: import your Base (e.g., from app import Base or app.models)
 import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
+import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Fix Heroku DATABASE_URL for asyncpg
-import os
-url = config.get_main_option("sqlalchemy.url")
-if url.startswith("postgres://"):
-    url = url.replace("postgres://", "postgresql://", 1)
-config.set_main_option("sqlalchemy.url", url)
+# Get Heroku DATABASE_URL and fix for SQLAlchemy/asyncpg
+db_url = os.environ.get('DATABASE_URL')
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql+asyncpg://', 1)
+else:
+    db_url = db_url.replace('postgresql://', 'postgresql+asyncpg://', 1)
+
+# Use async engine for migrations (matches your app's asyncpg usage)
+connectable = create_async_engine(db_url, poolclass=NullPool)
+
 
 target_metadata = Base.metadata  # Your models' metadata
 
