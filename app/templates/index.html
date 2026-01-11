@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>S3 Transfer Service</title>
+    <script src="/static/app.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        input, select, button { padding: 8px; margin: 5px 0; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .pending { background: #fff3cd; }
+        .in_progress { background: #cce5ff; }
+        .completed { background: #d4edda; }
+        .failed { background: #f8d7da; }
+        .job-list { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <h1>📁 S3 Bucket File Transfer</h1>
+    
+    <form id="transferForm">
+        <div class="form-group">
+            <label>Source Bucket:</label>
+            <input type="text" id="sourceBucket" placeholder="test" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Source Key:</label>
+            <input type="text" id="sourceKey" placeholder="file.txt" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Destination Bucket:</label>
+            <input type="text" id="destBucket" placeholder="backup" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Destination Key:</label>
+            <input type="text" id="destKey" placeholder="backup/file.txt" required>
+        </div>
+        
+        <button type="submit">🚀 Start Transfer</button>
+    </form>
+
+    <div id="status"></div>
+
+    <div class="job-list">
+        <h3>Recent Jobs:</h3>
+        <div id="jobList"></div>
+    </div>
+</body>
+</html>
