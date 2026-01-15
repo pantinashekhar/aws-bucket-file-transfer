@@ -1,1 +1,0 @@
-{"key":"foo.txt","size":53}
