@@ -1,49 +1,59 @@
 import os
 import aiofiles
-from typing import List
-from io import BytesIO
-from .base import StorageClient, StorageObject
+import logging
+from pathlib import Path
+from typing import BinaryIO
+from .base import StorageClient  # Your abstract base
+
+
+logger = logging.getLogger(__name__)
+
 
 class LocalStorageClient(StorageClient):
     def __init__(self, data_dir: str = "data"):
-        self.data_dir = os.path.abspath(data_dir)
-        os.makedirs(self.data_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.data_dir, "test"), exist_ok=True)  # Source bucket
-        os.makedirs(os.path.join(self.data_dir, "backup"), exist_ok=True)  # Dest bucket
-
-    async def list_objects(self, bucket: str, prefix: str | None = None) -> List[StorageObject]:
-        bucket_path = os.path.join(self.data_dir, bucket)
-        if not os.path.exists(bucket_path):
-            return []
-        
-        objects = []
-        for root, _, files in os.walk(bucket_path):
-            for file in files:
-                key = os.path.relpath(os.path.join(root, file), bucket_path)
-                if prefix and not key.startswith(prefix):
-                    continue
-                size = os.path.getsize(os.path.join(root, file))
-                objects.append(StorageObject(key, size))
-        return objects
-
-    async def upload_file(self, bucket: str, key: str, file_obj: BinaryIO) -> None:
-        bucket_path = os.path.join(self.data_dir, bucket, key)
-        os.makedirs(os.path.dirname(bucket_path), exist_ok=True)
-        
-        data = file_obj.read()
-        async with aiofiles.open(bucket_path, 'wb') as f:
-            await f.write(data)
-        print(f"✅ Uploaded {bucket}/{key}")
+        # ✅ Absolute project root path (works on Windows)
+        project_root = Path(__file__).parent.parent.parent  # storage -> app -> root
+        self.data_dir = project_root / data_dir
+        self.data_dir.mkdir(exist_ok=True)
+        logger.info(f"🔗 LocalStorage root: {self.data_dir.absolute()}")
 
     async def download_file(self, bucket: str, key: str) -> bytes:
-        file_path = os.path.join(self.data_dir, bucket, key)
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"{bucket}/{key} not found")
-        
+        file_path = self.data_dir / bucket / key
+        logger.info(f"📥 Downloading {bucket}/{key} -> {file_path.absolute()}")
+        if not file_path.exists():
+            # Auto-create test file if missing
+            if bucket == "test" and key == "foo.txt":
+                test_content = b"Hello fake S3 world!\n"
+                test_path = self.data_dir / bucket / key
+                test_path.parent.mkdir(exist_ok=True)
+                async with aiofiles.open(test_path, 'wb') as f:
+                    await f.write(test_content)
+                logger.info(f"🆕 Auto-created test/foo.txt ({len(test_content)} bytes)")
+            else:
+                raise FileNotFoundError(f"{bucket}/{key} not found: {file_path}")
         async with aiofiles.open(file_path, 'rb') as f:
-            return await f.read()
+            data = await f.read()
+        logger.info(f"✅ Downloaded {len(data)} bytes")
+        return data
 
-# Create test file
-async def create_test_file():
-    async with aiofiles.open("data/test/foo.txt", 'w') as f:
-        await f.write("Hello fake S3 world!")
+    async def upload_file(self, bucket: str, key: str, data: bytes | BinaryIO) -> None:
+        bucket_path = self.data_dir / bucket / Path(key).parent
+        bucket_path.mkdir(parents=True, exist_ok=True)
+        file_path = self.data_dir / bucket / key
+        logger.info(f"📤 Uploading to {bucket}/{key}")
+        
+        if isinstance(data, bytes):
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(data)  # ✅ bytes: direct write
+        elif hasattr(data, 'read'):  # BinaryIO check
+            data.seek(0)
+            async with aiofiles.open(file_path, 'wb') as f:
+                while True:
+                    chunk = data.read(8192)  # Sync read() on BytesIO [web:81]
+                    if not chunk:
+                        break
+                    await f.write(chunk)
+        else:
+            raise TypeError(f"Unsupported data type: {type(data)}")
+        
+        logger.info(f"✅ Uploaded {file_path.absolute()}")

@@ -1,3 +1,4 @@
+import io
 from fastapi import APIRouter, Depends, HTTPException, Query , BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -89,25 +90,36 @@ async def get_job_status(
     }
 
 
-async def perform_transfer(job_id: int, storage: StorageClient):
-    # ✅ Correct - import and use get_session dependency pattern
-    # Add this import
-    async with get_session() as session:  # Or await get_db() if it's a generator  # Reuse get_session dep
-        job = await session.get(TransferJob, job_id)
-        if not job: return
-        logger.info(f"🔥 BACKGROUND START {job.job_id}")
-        job.status = OperationStatus.IN_PROGRESS
-        await session.commit()
-        try:
+from io import BytesIO
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import AsyncSessionLocal  # Your async_sessionmaker
+
+async def perform_transfer(job_id: str, storage):  # Use str for UUID job_id
+    async_session = AsyncSessionLocal()
+    try:
+        async with async_session as session:
+            job = await session.get(TransferJob, job_id)
+            if not job:
+                return
+            job.status = OperationStatus.IN_PROGRESS
+            await session.commit()
+            
             data = await storage.download_file(job.source_bucket, job.source_key)
-            logger.info(f"📥 {len(data)} bytes")
-            await storage.upload_file(job.dest_bucket, job.dest_key, data)
-            logger.info("📤 UPLOADED")
+            logger.info(f"Downloaded {len(data)} bytes")
+            
+            # ✅ Critical fix: Wrap bytes in BytesIO for upload_file
+            file_like = io.BytesIO(data)
+            await storage.upload_file(job.dest_bucket, job.dest_key, file_like)
+            logger.info("✅ Uploaded")
+            
             job.status = OperationStatus.COMPLETED
-        except Exception as e:
+        await async_session.commit()
+    except Exception as e:
+        async with async_session as session:
+            job = await session.get(TransferJob, job_id)
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
-            logger.error(f"💥 {e}")
-        await session.commit()
-
-
+            await session.commit()
+        logger.error(f"💥 {e}")
+    finally:
+        await async_session.close()
