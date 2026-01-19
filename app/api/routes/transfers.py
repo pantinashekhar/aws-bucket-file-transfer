@@ -1,3 +1,4 @@
+import asyncio
 import io
 from fastapi import APIRouter, Depends, HTTPException, Query , BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +45,9 @@ async def create_transfer(
     await session.commit()
     await session.refresh(job)  # ✅ Gets job_id
     
-    background_tasks.add_task(perform_transfer, job.id, storage)
+    # ✅ Best: Use asyncio.ensure_future
+    background_tasks.add_task(asyncio.ensure_future(perform_transfer(job.id, storage)))
+
     
     return {
         "job_id": job.job_id,  # ✅ Now populated
@@ -115,11 +118,9 @@ async def perform_transfer(job_id: str, storage):  # Use str for UUID job_id
             job.status = OperationStatus.COMPLETED
         await async_session.commit()
     except Exception as e:
-        async with async_session as session:
-            job = await session.get(TransferJob, job_id)
+            logger.error(f"Transfer failed: {e}")
             job.status = OperationStatus.FAILED
             job.error_message = str(e)
             await session.commit()
-        logger.error(f"💥 {e}")
     finally:
         await async_session.close()
